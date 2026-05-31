@@ -396,10 +396,10 @@ button{cursor:pointer}
       <div class="field"><label>Ba&#x15f;lang&#x131;&#xe7; sto&#x11f;u (adet) &#x2014; bo&#x15f; = takip yok</label>
         <input class="fi" type="number" id="m-stock" min="0" placeholder="&#xd6;rn: 20"></div>
       <div class="row2">
-        <div class="field"><label>A&#xe7;&#x131;l&#x131;&#x15f; tarihi &#x2014; iste&#x11f;e ba&#x11f;l&#x131;</label>
+        <div class="field"><label>A&#xe7;&#x131;l&#x131;&#x15f; / ba&#x15f;lang&#x131;&#xe7; tarihi</label>
           <input class="fi" type="date" id="m-opendate"></div>
-        <div class="field"><label>Ka&#xe7; g&#xfc;n ge&#xe7;erli</label>
-          <input class="fi" type="number" id="m-expdays" min="1" placeholder="&#xd6;rn: 28"></div>
+        <div class="field"><label>Ka&#xe7; g&#xfc;n ge&#xe7;erli (&#xf6;rn: 28)</label>
+          <input class="fi" type="number" id="m-expdays" min="1" placeholder="G&#xfc;n say&#x131;s&#x131;"></div>
       </div>
       <div class="field"><label>Renk</label>
         <div class="cpicks" id="m-colors">
@@ -563,12 +563,23 @@ function dk(){return SK+(user?'_'+btoa(user.email).slice(0,8):'');}
 function loadData(){
   try{
     const s=localStorage.getItem(dk());
-    if(s){const d=JSON.parse(s);meds=d.meds||[];checked=new Set(d.checked||[]);bells=d.bells||{};hist=d.hist||{};}
+    if(s){
+      const d=JSON.parse(s);
+      meds=d.meds||[];
+      bells=d.bells||{};
+      hist=d.hist||{};
+      // Eğer son kayıt bugüne aitse checked'i yükle, değilse sıfırla
+      if(d.checkedDate===TK){
+        checked=new Set(d.checked||[]);
+      }else{
+        checked=new Set(); // yeni gün, checked sıfırla
+      }
+    }
     else{meds=[];checked=new Set();bells={};hist={};}
   }catch{meds=[];checked=new Set();bells={};hist={};}
 }
 function save(){
-  try{localStorage.setItem(dk(),JSON.stringify({meds,checked:[...checked],bells,hist}));}catch{}
+  try{localStorage.setItem(dk(),JSON.stringify({meds,checked:[...checked],checkedDate:TK,bells,hist}));}catch{}
 }
 
 // ─── TOAST ─────────────────────────────────────────
@@ -695,11 +706,11 @@ function toggleDose(cid,mid,e){
   const freq=getTimes(m).length;
   if(checked.has(cid)){
     checked.delete(cid);
-    if(m.stock!=null)m.stock=Math.min(m.stock+1,m.origStock||9999);
+    if(m.stock!=null)m.stock=Math.min(+(m.stock+(1/freq)).toFixed(4),m.origStock||9999);
     toast('Geri alındı');
   }else{
     checked.add(cid);
-    if(m.stock!=null)m.stock=Math.max(0,m.stock-1);
+    if(m.stock!=null)m.stock=Math.max(0,+(m.stock-(1/freq)).toFixed(4));
     let tot=_todayTotal();
     toast(checked.size>=tot?'✓ '+m.name+' — Tümü tamam!':'✓ '+m.name+' alındı');
   }
@@ -764,8 +775,11 @@ function renderMeds(){
 
 function getExpInfo(m){
   if(!m.openDate||!m.expDays)return null;
-  const open=new Date(m.openDate);
-  const exp=new Date(open);exp.setDate(exp.getDate()+m.expDays);
+  // "YYYY-MM-DD" stringini lokal saat olarak parse et (UTC kaymasını önle)
+  const parts=m.openDate.split('-').map(Number);
+  const open=new Date(parts[0],parts[1]-1,parts[2]); // lokal tarih
+  const exp=new Date(open);exp.setDate(exp.getDate()+parseInt(m.expDays));
+  exp.setHours(0,0,0,0);
   const now=new Date();now.setHours(0,0,0,0);
   const diffMs=exp-now;
   const diffDays=Math.ceil(diffMs/(1000*60*60*24));
