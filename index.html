@@ -395,6 +395,12 @@ button{cursor:pointer}
       </div>
       <div class="field"><label>Ba&#x15f;lang&#x131;&#xe7; sto&#x11f;u (adet) &#x2014; bo&#x15f; = takip yok</label>
         <input class="fi" type="number" id="m-stock" min="0" placeholder="&#xd6;rn: 20"></div>
+      <div class="row2">
+        <div class="field"><label>A&#xe7;&#x131;l&#x131;&#x15f; tarihi &#x2014; iste&#x11f;e ba&#x11f;l&#x131;</label>
+          <input class="fi" type="date" id="m-opendate"></div>
+        <div class="field"><label>Ka&#xe7; g&#xfc;n ge&#xe7;erli</label>
+          <input class="fi" type="number" id="m-expdays" min="1" placeholder="&#xd6;rn: 28"></div>
+      </div>
       <div class="field"><label>Renk</label>
         <div class="cpicks" id="m-colors">
           <span class="cp sel" data-c="#1D9E75" style="background:#1D9E75"></span>
@@ -622,10 +628,13 @@ function renderToday(){
   document.getElementById('h-streak').textContent=calcStreak();
   document.getElementById('prog').style.width=(totalDose>0?Math.round(done/totalDose*100):0)+'%';
 
-  // Stok uyarısı
+  // Stok ve bitiş tarihi uyarısı
   const low=meds.filter(m=>m.stock!=null&&m.stock<=7);
-  document.getElementById('alert-area').innerHTML=low.length
-    ?'<div class="alert-box">⚠️ Stok azalıyor: '+low.map(m=>m.name+' ('+Math.round(m.stock)+' adet)').join(', ')+'</div>':'';
+  const expWarn=meds.filter(m=>{const i=getExpInfo(m);return i&&(i.expired||i.urgent);});
+  let alertHtml='';
+  if(low.length)alertHtml+='<div class="alert-box">⚠️ Stok azalıyor: '+low.map(m=>m.name+' ('+Math.round(m.stock)+' adet)').join(', ')+'</div>';
+  if(expWarn.length)alertHtml+='<div class="alert-box" style="margin-top:6px;background:var(--red-bg);border-color:var(--red);color:var(--red-t)">⏰ Bitiş tarihi: '+expWarn.map(m=>{const i=getExpInfo(m);return m.name+(i.expired?' (doldu)':' ('+i.diffDays+' gün)');}).join(', ')+'</div>';
+  document.getElementById('alert-area').innerHTML=alertHtml;
 
   // Tamamlandı banner — emoji unicode düzgün
   const uname=user&&user.name&&user.name!==user.email?user.name.split(' ')[0]:'';
@@ -667,7 +676,7 @@ function renderToday(){
     const el=document.createElement('div');el.className='med-card'+(d?' done':'');
     el.innerHTML=dotEl(m)
       +'<div class="med-info">'
-        +'<div class="med-nm'+(d?' cross':'')+'">'+m.name+'</div>'
+        +'<div class="med-nm'+(d?' cross':'')+'">'+m.name+expBadge(m)+'</div>'
         +'<div class="med-sub">'
           +'<span>🕐 '+t+'</span>'
           +(m.brand?'<span>💊 '+m.brand+'</span>':'')
@@ -736,7 +745,7 @@ function renderMeds(){
     const el=document.createElement('div');el.className='med-row';
     el.innerHTML=dotEl(m)
       +'<div class="med-info" style="cursor:pointer" onclick="openEdit('+m.id+')">'
-        +'<div class="med-nm">'+m.name+'</div>'
+        +'<div class="med-nm">'+m.name+expBadge(m)+'</div>'
         +'<div class="med-sub">'
           +(m.brand?'<span>💊 '+m.brand+'</span>':'')
           +'<span>🕐 '+times.join(', ')+'</span>'
@@ -751,6 +760,23 @@ function renderMeds(){
       +'</div>';
     list.appendChild(el);
   });
+}
+
+function getExpInfo(m){
+  if(!m.openDate||!m.expDays)return null;
+  const open=new Date(m.openDate);
+  const exp=new Date(open);exp.setDate(exp.getDate()+m.expDays);
+  const now=new Date();now.setHours(0,0,0,0);
+  const diffMs=exp-now;
+  const diffDays=Math.ceil(diffMs/(1000*60*60*24));
+  return{exp,diffDays,expired:diffDays<0,urgent:diffDays>=0&&diffDays<=3};
+}
+
+function expBadge(m){
+  const info=getExpInfo(m);if(!info)return '';
+  if(info.expired)return '<span style="background:var(--red-bg);color:var(--red-t);font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:6px">⚠️ Süresi doldu!</span>';
+  if(info.urgent)return '<span style="background:var(--amber-bg);color:var(--amber-t);font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:6px">⏰ '+info.diffDays+' gün kaldı</span>';
+  return '<span style="background:var(--green-bg);color:var(--green-t);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;margin-left:6px">📅 '+info.diffDays+' gün kaldı</span>';
 }
 
 // ─── FOTOĞRAF ──────────────────────────────────────
@@ -832,6 +858,8 @@ function openAdd(){
   document.getElementById('m-name').value='';
   document.getElementById('m-brand').value='';
   document.getElementById('m-stock').value='';
+  document.getElementById('m-opendate').value='';
+  document.getElementById('m-expdays').value='';
   document.getElementById('m-slots').innerHTML='';
   addSlot('m-slots','m-slot-inp','08:00');
   selCol='#1D9E75';
@@ -849,6 +877,8 @@ function openEdit(id){
   document.getElementById('m-name').value=m.name;
   document.getElementById('m-brand').value=m.brand||'';
   document.getElementById('m-stock').value=m.stock!=null?Math.round(m.stock):'';
+  document.getElementById('m-opendate').value=m.openDate||'';
+  document.getElementById('m-expdays').value=m.expDays||'';
   document.getElementById('m-slots').innerHTML='';
   getTimes(m).forEach((t,i)=>addSlot('m-slots','m-slot-inp',t));
   // ilk slot'un sil butonu yok — ama addSlot isFirst kontrolüyle yapıyor
@@ -866,6 +896,8 @@ function saveMed(){
   const brand=document.getElementById('m-brand').value.trim();
   const sv=document.getElementById('m-stock').value.trim();
   const stock=sv!==''?parseInt(sv):null;
+  const openDate=document.getElementById('m-opendate').value||null;
+  const expDays=document.getElementById('m-expdays').value?parseInt(document.getElementById('m-expdays').value):null;
   const tInps=[...document.querySelectorAll('.m-slot-inp')].map(i=>i.value).filter(Boolean);
   const times=[...new Set(tInps)].sort();
   if(!times.length){toast('En az bir saat gerekli.');return;}
@@ -876,11 +908,12 @@ function saveMed(){
     if(meds.find(m=>m.name.toLowerCase()===name.toLowerCase())){
       toast(name+' zaten listede! Düzenlemek için ✏️ butonunu kullan.');return;
     }
-    meds.push({id:Date.now(),name,brand,times,time:times[0],color:selCol,stock,origStock:stock,days,photo:currentPhotoB64||null});
+    meds.push({id:Date.now(),name,brand,times,time:times[0],color:selCol,stock,origStock:stock,days,photo:currentPhotoB64||null,openDate,expDays});
     toast('✓ '+name+' eklendi');
   }else{
     const m=meds.find(x=>x.id===editId);if(!m)return;
     m.name=name;m.brand=brand;m.times=times;m.time=times[0];m.color=selCol;m.days=days;
+    m.openDate=openDate;m.expDays=expDays;
     if(currentPhotoB64!==undefined)m.photo=currentPhotoB64;
     if(stock!==null){m.stock=stock;if(!m.origStock||stock>m.origStock)m.origStock=stock;}
     else{m.stock=null;}
