@@ -190,6 +190,15 @@ button{cursor:pointer}
 .se-num{font-size:44px;font-weight:800;min-width:80px;text-align:center}
 .se-hint{font-size:12px;color:var(--txt3);text-align:center;margin-bottom:12px;font-weight:500}
 
+/* FOTOĞRAF */
+.photo-upload-area{border:2px dashed var(--border2);border-radius:var(--rx);padding:16px;text-align:center;cursor:pointer;transition:border-color .2s;position:relative}
+.photo-upload-area:hover{border-color:var(--green)}
+.photo-upload-area input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.photo-preview{width:100%;max-height:160px;object-fit:contain;border-radius:var(--rx);margin-top:8px;display:none}
+.photo-preview.show{display:block}
+.photo-remove{margin-top:6px;font-size:12px;color:var(--red);background:none;border:none;cursor:pointer;font-weight:700;font-family:inherit}
+.med-thumb{width:44px;height:44px;border-radius:12px;object-fit:cover;flex-shrink:0;border:1.5px solid var(--border)}
+
 /* GÜN SEÇİCİ */
 .day-picks{display:flex;gap:6px;margin-top:4px}
 .dp{flex:1;height:34px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg);font-size:11px;font-weight:700;color:var(--txt3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s}
@@ -374,6 +383,14 @@ button{cursor:pointer}
           <div class="dp sel" data-d="5">Cum</div>
           <div class="dp sel" data-d="6">Cmt</div>
           <div class="dp sel" data-d="0">Paz</div>
+        </div>
+      </div>
+      <div class="field"><label>&#x0130;la&#xe7; foto&#x11f;raf&#x131; <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--txt3)">&#x2014; iste&#x11f;e ba&#x11f;l&#x131;</span></label>
+        <div class="photo-upload-area" id="photo-upload-area">
+          <input type="file" id="m-photo" accept="image/*" onchange="onPhotoSelect(event)">
+          <div id="photo-placeholder">📷 Fotoğraf seç veya çek</div>
+          <img id="photo-preview" class="photo-preview" alt="önizleme">
+          <button type="button" class="photo-remove" id="photo-remove" style="display:none" onclick="removePhoto(event)">✕ Fotoğrafı kaldır</button>
         </div>
       </div>
       <div class="field"><label>Ba&#x15f;lang&#x131;&#xe7; sto&#x11f;u (adet) &#x2014; bo&#x15f; = takip yok</label>
@@ -581,7 +598,10 @@ function closeSheet(id){
 
 // ─── YARDIMCI ──────────────────────────────────────
 function ini(name){return name.trim().split(/\s+/).map(w=>w[0].toUpperCase()).join('').slice(0,2);}
-function dotEl(m){return '<div class="dot" style="background:'+m.color+'">'+ini(m.name)+'</div>';}
+function dotEl(m){
+  if(m.photo)return '<img class="med-thumb" src="'+m.photo+'" alt="'+m.name+'">';
+  return '<div class="dot" style="background:'+m.color+'">'+ini(m.name)+'</div>';
+}
 function getTimes(m){return(m.times&&m.times.length)?m.times:[m.time||'08:00'];}
 
 // ─── BUGÜN ─────────────────────────────────────────
@@ -733,6 +753,45 @@ function renderMeds(){
   });
 }
 
+// ─── FOTOĞRAF ──────────────────────────────────────
+let currentPhotoB64=null;
+
+function onPhotoSelect(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    currentPhotoB64=ev.target.result;
+    const prev=document.getElementById('photo-preview');
+    prev.src=currentPhotoB64;prev.classList.add('show');
+    document.getElementById('photo-placeholder').style.display='none';
+    document.getElementById('photo-remove').style.display='block';
+  };
+  reader.readAsDataURL(file);
+}
+function removePhoto(e){
+  e.stopPropagation();
+  currentPhotoB64=null;
+  document.getElementById('m-photo').value='';
+  document.getElementById('photo-preview').classList.remove('show');
+  document.getElementById('photo-preview').src='';
+  document.getElementById('photo-placeholder').style.display='block';
+  document.getElementById('photo-remove').style.display='none';
+}
+function _resetPhotoUI(photoB64){
+  currentPhotoB64=photoB64||null;
+  const prev=document.getElementById('photo-preview');
+  if(photoB64){
+    prev.src=photoB64;prev.classList.add('show');
+    document.getElementById('photo-placeholder').style.display='none';
+    document.getElementById('photo-remove').style.display='block';
+  }else{
+    prev.classList.remove('show');prev.src='';
+    document.getElementById('photo-placeholder').style.display='block';
+    document.getElementById('photo-remove').style.display='none';
+  }
+  document.getElementById('m-photo').value='';
+}
+
 // ─── EKLE / DÜZENLE ────────────────────────────────
 let editId=null, selCol='#1D9E75';
 
@@ -777,7 +836,8 @@ function openAdd(){
   addSlot('m-slots','m-slot-inp','08:00');
   selCol='#1D9E75';
   document.getElementById('m-colors').querySelectorAll('.cp').forEach(s=>s.classList.toggle('sel',s.dataset.c==='#1D9E75'));
-  _setDays([0,1,2,3,4,5,6]); // varsayılan: tüm günler
+  _setDays([0,1,2,3,4,5,6]);
+  _resetPhotoUI(null);
   openSheet('med');
   setTimeout(()=>document.getElementById('m-name').focus(),250);
 }
@@ -796,6 +856,7 @@ function openEdit(id){
   selCol=m.color;
   document.getElementById('m-colors').querySelectorAll('.cp').forEach(s=>s.classList.toggle('sel',s.dataset.c===m.color));
   _setDays(m.days&&m.days.length?m.days:[0,1,2,3,4,5,6]);
+  _resetPhotoUI(m.photo||null);
   openSheet('med');
 }
 
@@ -815,11 +876,12 @@ function saveMed(){
     if(meds.find(m=>m.name.toLowerCase()===name.toLowerCase())){
       toast(name+' zaten listede! Düzenlemek için ✏️ butonunu kullan.');return;
     }
-    meds.push({id:Date.now(),name,brand,times,time:times[0],color:selCol,stock,origStock:stock,days});
+    meds.push({id:Date.now(),name,brand,times,time:times[0],color:selCol,stock,origStock:stock,days,photo:currentPhotoB64||null});
     toast('✓ '+name+' eklendi');
   }else{
     const m=meds.find(x=>x.id===editId);if(!m)return;
     m.name=name;m.brand=brand;m.times=times;m.time=times[0];m.color=selCol;m.days=days;
+    if(currentPhotoB64!==undefined)m.photo=currentPhotoB64;
     if(stock!==null){m.stock=stock;if(!m.origStock||stock>m.origStock)m.origStock=stock;}
     else{m.stock=null;}
     toast('✓ '+name+' güncellendi');
@@ -1009,31 +1071,32 @@ function expPDF(){
   let rows='';
   meds.forEach((m,i)=>{
     const times=getTimes(m);
+    const stockTxt=m.stock!=null?Math.round(m.stock)+' adet':'—';
+    const photoHtml=m.photo?'<img src="'+m.photo+'" style="width:160px;height:160px;object-fit:cover;border-radius:10px;display:block;margin-bottom:4px">':'';
     rows+='<tr style="background:'+(i%2===0?'#f9f9f9':'#fff')+'">'
-      +'<td>'+m.name+'</td>'
-      +'<td>'+(m.brand||'—')+'</td>'
-      +'<td>'+times.join(', ')+'</td>'
-      +'<td>'+times.length+'x/gun</td>'
-      +'<td>'+(m.stock!=null?Math.round(m.stock)+' adet':'—')+'</td>'
+      +'<td style="text-align:center">'+photoHtml+'<span style="font-size:11px;color:#999">'+(m.photo?'':'fotoğraf yok')+'</span></td>'
+      +'<td><strong>'+m.name+'</strong>'+(m.brand?'<br><span style="font-size:12px;color:#666">'+m.brand+'</span>':'')+'</td>'
+      +'<td>'+times.join('<br>')+'</td>'
+      +'<td>'+times.length+'×/gün</td>'
+      +'<td>'+stockTxt+'</td>'
       +'</tr>';
   });
   const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Ilac Raporu</title>'
     +'<style>body{font-family:Arial,sans-serif;padding:32px;color:#1A1917}'
-    +'h1{font-size:20px;margin-bottom:4px}'
-    +'.sub{font-size:13px;color:#666;margin-bottom:20px}'
+    +'h1{font-size:20px;margin-bottom:4px}.sub{font-size:13px;color:#666;margin-bottom:20px}'
     +'table{width:100%;border-collapse:collapse;font-size:13px}'
     +'th{background:#1D9E75;color:#fff;padding:9px 11px;text-align:left}'
-    +'td{padding:8px 11px;border-bottom:1px solid #eee}'
+    +'td{padding:14px 11px;border-bottom:1px solid #eee;vertical-align:middle}'
     +'.foot{margin-top:20px;font-size:11px;color:#aaa}'
     +'</style></head><body>'
     +'<h1>Ilac Raporu</h1>'
     +'<div class="sub">Kullanici: '+(user?.name||'—')+' | Tarih: '+dateStr+' | Toplam: '+meds.length+' ilac</div>'
-    +'<table><thead><tr><th>Ilac</th><th>Marka</th><th>Saatler</th><th>Siklik</th><th>Stok</th></tr></thead>'
+    +'<table><thead><tr><th style="width:180px">Fotograf</th><th>Ilac</th><th>Saatler</th><th>Siklik</th><th>Stok</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table>'
     +'<div class="foot">Ilac Takip uygulamasindan olusturulmustur.</div>'
     +'</body></html>';
   dl(html,'ilac_raporu.html','text/html;charset=utf-8;');
-  toast('Rapor indirildi — tarayıcıda açıp yazdırabilirsiniz');
+  toast('Rapor indirildi');
 }
 
 
