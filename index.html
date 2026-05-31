@@ -432,6 +432,40 @@ input,select{font-family:inherit}
   </div>
 </div>
 
+<!-- EDIT MED SHEET -->
+<div class="overlay" id="overlay-edit">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">&#x270F;&#xFE0F; &#x0130;lac&#x131; d&#xfc;zenle</div>
+      <button class="sheet-close" onclick="closeOverlay('overlay-edit')">&#x2715;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field">
+        <label>&#x0130;la&#xe7; ad&#x131;</label>
+        <input class="f-input" id="e-name" type="text">
+      </div>
+      <div class="field">
+        <label>Marka / form</label>
+        <input class="f-input" id="e-brand" type="text">
+      </div>
+      <div class="field">
+        <label>Saatler</label>
+        <div id="edit-time-slots"></div>
+        <button type="button" class="add-time-btn" onclick="addEditTimeSlot()">+ Saat ekle</button>
+      </div>
+      <div class="field">
+        <label>Stok (adet)</label>
+        <input class="f-input" type="number" id="e-stock" min="0" placeholder="Bo&#x15f; = takip yok">
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="sheet-btn" onclick="closeOverlay('overlay-edit')">&#x0130;ptal</button>
+      <button class="sheet-btn primary" onclick="saveEdit()">&#x2713; Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <!-- SIGNOUT SHEET -->
 <div class="overlay" id="overlay-signout">
   <div class="sheet">
@@ -474,7 +508,54 @@ function toggleAuthMode(){
   document.getElementById('auth-toggle-text').textContent=isRegister?'Zaten hesabın var mı?':'Hesabın yok mu?';
   document.getElementById('auth-toggle-btn').textContent=isRegister?'Giriş yap':'Kayıt ol';
 }
-function openSignOutSheet(){document.getElementById('overlay-signout').classList.add('open');}
+let editMedId=null;
+function openEditSheet(id){
+  const m=userMeds.find(x=>x.id===id);if(!m)return;
+  editMedId=id;
+  document.getElementById('e-name').value=m.name;
+  document.getElementById('e-brand').value=m.brand||'';
+  document.getElementById('e-stock').value=m.stock!=null?Math.round(m.stock):'';
+  // Renk
+  document.getElementById('e-color-picks').querySelectorAll('.ecpick').forEach(s=>{
+    s.classList.toggle('sel',s.dataset.c===m.color);
+  });
+  editSelColor=m.color;
+  // Saatler
+  const slots=document.getElementById('edit-time-slots');slots.innerHTML='';
+  const times=m.times&&m.times.length?m.times:[m.time];
+  times.forEach((t,i)=>_addEditSlot(t,i===0));
+  document.getElementById('overlay-edit').classList.add('open');
+}
+let editSelColor='#1D9E75';
+function _addEditSlot(val,isFirst){
+  const container=document.getElementById('edit-time-slots');
+  const row=document.createElement('div');row.className='time-slot-row';
+  row.innerHTML='<input type="time" class="edit-time-input" value="'+(val||'08:00')+'">'
+    +(!isFirst
+      ?'<button type="button" class="time-slot-remove" onclick="this.parentElement.remove()">&#x2715;</button>'
+      :'<div style="width:34px"></div>');
+  container.appendChild(row);
+}
+function addEditTimeSlot(){_addEditSlot('',false);}
+function saveEdit(){
+  const m=userMeds.find(x=>x.id===editMedId);if(!m)return;
+  const newName=document.getElementById('e-name').value.trim();
+  if(!newName){showToast('\u0130la\xe7 ad\u0131 bo\u015f olamaz.');return;}
+  m.name=newName;
+  m.brand=document.getElementById('e-brand').value.trim();
+  m.color=editSelColor;
+  const sv=document.getElementById('e-stock').value.trim();
+  if(sv!==''){m.stock=parseInt(sv);if(!m.origStock||m.origStock<m.stock)m.origStock=m.stock;}
+  else{m.stock=null;}
+  const timeInputs=[...document.querySelectorAll('.edit-time-input')].map(i=>i.value).filter(Boolean);
+  const times=[...new Set(timeInputs)].sort();
+  if(!times.length){showToast('En az bir saat gerekli.');return;}
+  m.times=times;m.time=times[0];
+  saveData();closeOverlay('overlay-edit');renderMeds();
+  if(currentTab==='today')renderToday();
+  showToast('\u2713 '+m.name+' g\xfcncellendi');
+}
+function openSignOutSheet()({document.getElementById('overlay-signout').classList.add('open');}
 function signOut(){
   closeOverlay('overlay-signout');
   clearAuth();currentUser=null;
@@ -539,7 +620,10 @@ function colorDot(m){return '<div class="med-dot" style="background:'+m.color+'"
 
 function renderToday(){
   document.getElementById('today-date').textContent=today.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long'});
-  const total=userMeds.length,done=checkedToday.size;
+  // Toplam kart sayisi = tum saatler
+  let totalCards=0;
+  userMeds.forEach(m=>{totalCards+=(m.times&&m.times.length?m.times.length:1);});
+  const total=totalCards,done=checkedToday.size;
   document.getElementById('h-total').textContent=total;
   document.getElementById('h-done').textContent=done;
   document.getElementById('h-streak').textContent=calcStreak();
@@ -547,8 +631,9 @@ function renderToday(){
   const low=userMeds.filter(m=>m.stock!=null&&m.stock<=7);
   document.getElementById('alert-area').innerHTML=low.length
     ?'<div class="alert-card">\u26a0\ufe0f <span><strong>Stok uyar\u0131s\u0131:</strong> '+low.map(m=>m.name+' ('+Math.round(m.stock)+' adet)').join(', ')+' azal\u0131yor.</span></div>':'';
+  const userName=currentUser&&currentUser.name&&currentUser.name!==currentUser.email?currentUser.name.split(' ')[0]:'';
   document.getElementById('complete-area').innerHTML=(total>0&&done>=total)
-    ?'<div class="complete-banner">\u2705 Harika! Bug\xfcnk\xfc t\xfcm ila\xe7lar\u0131n\u0131 ald\u0131n \U0001F389</div>':'';
+    ?'<div class="complete-banner">\u2705 Harika'+(userName?' '+userName:'')+'! Bug\xfcnk\xfc t\xfcm ila\xe7lar\u0131n\u0131 ald\u0131n!</div>':'';
   const sr=document.getElementById('streak-row');sr.innerHTML='';
   for(let i=6;i>=0;i--){
     const d=new Date(today);d.setDate(d.getDate()-i);
@@ -575,19 +660,27 @@ function renderToday(){
   });
   saveData();
 }
-function toggleCheck(id,e){
+function toggleCheck(cardId,e,medId){
   e.stopPropagation();
-  const m=userMeds.find(x=>x.id===id);if(!m)return;
-  if(checkedToday.has(id)){
-    checkedToday.delete(id);
-    if(m.stock!=null)m.stock=Math.min(m.stock+(1/m.freq),m.origStock||9999);
+  const mId=medId||cardId;
+  const m=userMeds.find(x=>String(x.id)===String(mId));if(!m)return;
+  const times=m.times&&m.times.length?m.times:[m.time];
+  const freq=times.length;
+  if(checkedToday.has(cardId)){
+    checkedToday.delete(cardId);
+    if(m.stock!=null)m.stock=Math.min(m.stock+(1/freq),m.origStock||9999);
     showToast('Geri al\u0131nd\u0131');
   }else{
-    checkedToday.add(id);
-    if(m.stock!=null)m.stock=Math.max(0,m.stock-(1/m.freq));
-    showToast(checkedToday.size>=userMeds.length?'\u2713 '+m.name+' \u2014 T\xfcm\xfc tamam! \U0001F389':'\u2713 '+m.name+' al\u0131nd\u0131');
+    checkedToday.add(cardId);
+    if(m.stock!=null)m.stock=Math.max(0,m.stock-(1/freq));
+    // kac kart var toplam
+    let totalCards=0;
+    userMeds.forEach(x=>{totalCards+=(x.times&&x.times.length?x.times.length:1);});
+    showToast(checkedToday.size>=totalCards?'\u2713 '+m.name+' \u2014 T\xfcm\xfc tamam!':'\u2713 '+m.name+' al\u0131nd\u0131');
   }
-  history[todayKey]={total:userMeds.length,done:checkedToday.size};
+  let totalCards=0;
+  userMeds.forEach(x=>{totalCards+=(x.times&&x.times.length?x.times.length:1);});
+  history[todayKey]={total:totalCards,done:checkedToday.size};
   renderToday();
 }
 function calcStreak(){
@@ -646,17 +739,17 @@ function saveMed(){
   const sv=document.getElementById('f-stock').value.trim();
   const stock=sv?parseInt(sv):null;
   const timeInputs=[...document.querySelectorAll('.time-slot-input')].map(i=>i.value).filter(Boolean);
-  const times=[...new Set(timeInputs)];
+  const times=[...new Set(timeInputs)].sort();
   if(!times.length){showToast('En az bir saat giriniz.');return;}
-  let added=0;
-  times.forEach(time=>{
-    if(userMeds.find(x=>x.name.toLowerCase()===name.toLowerCase()&&x.time===time)){return;}
-    userMeds.push({id:Date.now()+Math.random(),name,brand,freq:times.length,time,color:selColor,stock:stock!=null?Math.round(stock/times.length):null,origStock:stock!=null?Math.round(stock/times.length):null});
-    added++;
-  });
-  if(!added){showToast('Bu saatler zaten ekli!');return;}
+  // Ayn\u0131 isimde ila\xe7 varsa \xfczerine yaz de\u011fil, yeni ekle
+  if(userMeds.find(x=>x.name.toLowerCase()===name.toLowerCase())){
+    showToast(name+' zaten ekli! \u0130la\xe7lar sayfas\u0131ndan d\xfczenleyin.');return;
+  }
+  const id=Date.now();
+  userMeds.push({id,name,brand,times,time:times[0],color:selColor,stock,origStock:stock});
   closeOverlay('overlay-add');renderMeds();saveData();
-  showToast('\u2713 '+name+' eklendi ('+times.length+' saat)');
+  if(currentTab==='today')renderToday();
+  showToast('\u2713 '+name+' eklendi');
 }
 
 function confirmDel(id){
@@ -677,16 +770,19 @@ function renderStock(){
   if(!ws.length){empty.style.display='block';list.style.display='none';return;}
   empty.style.display='none';list.style.display='block';
   ws.forEach(m=>{
+    const times=m.times&&m.times.length?m.times:[m.time];
+    const freq=times.length;
     const stock=Math.max(0,Math.round(m.stock));
     const orig=m.origStock||stock;
     const pct=orig>0?Math.min(100,Math.round(stock/orig*100)):null;
-    const days=m.freq>0?Math.round(stock/m.freq):null;
+    const days=freq>0?Math.round(stock/freq):null;
     const low=stock<=7,warn=stock<=14&&stock>7;
     const barCol=low?'var(--red)':warn?'var(--amber)':'var(--green)';
     const el=document.createElement('div');el.className='stock-card';
     el.innerHTML='<div class="stock-row">'+colorDot(m)
       +'<div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:700">'+m.name+'</div>'
       +(m.brand?'<div style="font-size:12px;color:var(--txt3);font-weight:500">'+m.brand+'</div>':'')
+      +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">G\xfcnde '+freq+'\xd7 \u2022 '+times.join(', ')+'</div>'
       +(pct!=null?'<div class="stock-bar-wrap"><div class="stock-bar" style="width:'+pct+'%;background:'+barCol+'"></div></div>':'')
       +'</div><div class="stock-numbers"><div class="stock-count" style="color:'+(low?'var(--red)':warn?'var(--amber)':'var(--txt)')+'">'+stock+'</div>'
       +'<div style="font-size:11px;color:var(--txt3);font-weight:500">adet'+(days!=null?' \xb7 ~'+days+' g\xfcn':'')+'</div></div></div>'
@@ -749,11 +845,43 @@ function saveTime(id){
   const m=userMeds.find(x=>x.id===id);if(m){m.time=v;saveData();renderRemind();showToast('Saat g\xfcncellendi: '+v);}
 }
 function toggleBell(id){
+  if(!remindersOn[id]){
+    // izin iste
+    if('Notification' in window && Notification.permission==='default'){
+      Notification.requestPermission().then(p=>{
+        if(p==='granted'){remindersOn[id]=true;saveData();_updateBellUI(id);showToast('Hat\u0131rlat\u0131c\u0131 a\xe7\u0131ld\u0131 \ud83d\udd14');}
+        else{showToast('Bildirim izni verilmedi. Taray\u0131c\u0131 ayarlar\u0131ndan izin verin.');}
+      });
+      return;
+    }
+  }
   remindersOn[id]=!remindersOn[id];
-  const btn=document.getElementById('bell-'+id);
-  if(btn){btn.className='bell-btn'+(remindersOn[id]?' on':'');btn.textContent=remindersOn[id]?'\ud83d\udd14':'\ud83d\udd15';}
+  _updateBellUI(id);
   saveData();showToast(remindersOn[id]?'Hat\u0131rlat\u0131c\u0131 a\xe7\u0131ld\u0131 \ud83d\udd14':'Hat\u0131rlat\u0131c\u0131 kapat\u0131ld\u0131');
 }
+function _updateBellUI(id){
+  const btn=document.getElementById('bell-'+id);
+  if(btn){btn.className='bell-btn'+(remindersOn[id]?' on':'');btn.textContent=remindersOn[id]?'\ud83d\udd14':'\ud83d\udd15';}
+}
+// Her dakika kontrol et
+function checkReminders(){
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  const now=new Date(),h=now.getHours(),mn=now.getMinutes();
+  const nowStr=(h<10?'0':'')+h+':'+(mn<10?'0':'')+mn;
+  userMeds.forEach(m=>{
+    if(!remindersOn[m.id])return;
+    const times=m.times&&m.times.length?m.times:[m.time];
+    times.forEach((t,ti)=>{
+      if(t===nowStr){
+        const cardId=m.id+'_'+ti;
+        if(!checkedToday.has(cardId)){
+          new Notification('\ud83d\udc8a '+m.name, {body:t+' saatinde almay\u0131 unutma!',icon:''});
+        }
+      }
+    });
+  });
+}
+setInterval(checkReminders,60000);
 
 function renderHistory(){
   const bc=document.getElementById('bar-chart'),bl=document.getElementById('bar-labels');
@@ -826,7 +954,16 @@ function exportJSON(){
 }
 function dl(c,f,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=f;document.body.appendChild(a);a.click();document.body.removeChild(a);}
 
-(function(){const saved=loadAuth();if(saved){currentUser=saved;showApp();}})();
+(function(){
+  const saved=loadAuth();if(saved){currentUser=saved;showApp();}
+  // Edit renk seçici
+  document.getElementById('e-color-picks').querySelectorAll('.ecpick').forEach(s=>{
+    s.onclick=()=>{
+      document.querySelectorAll('.ecpick').forEach(x=>x.classList.remove('sel'));
+      s.classList.add('sel');editSelColor=s.dataset.c;
+    };
+  });
+})();
 </script>
 </body>
 </html>
